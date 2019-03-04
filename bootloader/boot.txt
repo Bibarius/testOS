@@ -1,0 +1,167 @@
+;[bits 16]
+[org 0x7c00]
+mov bp, 0x9000
+mov sp, bp
+
+mov bx, MESSAGE
+call PRINT_STRING
+jmp $
+;call switch_to_pm
+
+jmp $
+MSG_REAL_MODE: db 'Started', 0
+switch_to_pm:
+    cli
+    lgdt [gdt_descriptor]
+
+    mov eax, cr0
+    or eax, 0x1
+    mov cr0, eax
+
+    jmp CODE_SEG:init_pm
+
+[bits 32]
+
+BEGIN_PM:
+    mov ebx, MSG_PROT_MODE
+    call PRINT_STRING
+
+init_pm:
+    mov ax, DATA_SEG
+    mov ds, ax
+    mov ss, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    mov ebp, 0x90000
+    mov esp, ebp
+
+    call BEGIN_PM
+
+gdt_start:
+gdt_null:
+    dd 0x0
+    dd 0x0
+
+gdt_code:
+    dw 0xffff
+    dw 0x0
+    db 0x0
+    db 10011010b
+    db 11001111b
+    db 0x0
+
+gdt_data:
+    dw 0xffff
+    dw 0x0
+    db 0x0
+    db 10010010b
+    db 11001111b
+    db 0x0
+gdt_end:
+
+
+
+gdt_descriptor:
+    dw gdt_end - gdt_start - 1
+    dd gdt_start
+
+CODE_SEG equ gdt_code - gdt_start
+DATA_SEG equ gdt_data - gdt_start 
+
+PRINT_HEX:
+    mov cx, dx
+    and cx, 0xf000
+    shr cx, 12
+    call comparision
+    mov [HEX_OUT_TEMPLATE + 2], cx
+
+    mov cx, dx
+    and cx, 0x0f00
+    shr cx, 8
+    call comparision
+    mov [HEX_OUT_TEMPLATE + 3], cx
+
+    mov cx, dx
+    and cx, 0x00f0
+    shr cx, 4
+    call comparision
+    mov [HEX_OUT_TEMPLATE + 4], cx
+
+    mov cx, dx
+    and cx, 0x000f
+    call comparision
+    mov [HEX_OUT_TEMPLATE + 5], cx
+
+    mov bx, HEX_OUT_TEMPLATE
+    call PRINT_STRING
+    ret
+
+    comparision:
+        cmp cx, 9
+        jle digit 
+        jg  letter
+        digit:
+            add cx, 0x30
+            jmp endcmp
+        letter:
+            add cx, 0x37
+            jmp endcmp
+        endcmp:
+            ret
+
+
+
+DISK_LOAD:
+    ;   load DH sectors to ES:BX from drive DL
+    
+    push dx
+    mov ah, 0x02    ;   BIOS read sector function
+    mov al, dh      ;   red DH sectors
+    mov ch, 0x00    ;   select cylinder 0
+    mov dh, 0x00    ;   select head 0
+    mov cl, 0x02    ;   start reading from second sector (after the boot sector) 
+
+    int 0x13        ;   BIOS interrupt
+
+    jc disk_error
+
+    pop dx
+    cmp dh, al
+    jne disk_error
+    ret
+
+
+
+
+disk_error:
+    mov bx, DISK_ERROR_MSG
+    call PRINT_STRING
+    jmp $
+
+
+
+
+;=======================================================================================
+;  DATA
+    MESSAGE: 
+        db 'Hello, World!', 0
+    HEX_OUT_TEMPLATE:
+        db '0x0000', 0  
+    DISK_ERROR_MSG:
+        db 'Disk read error!', 0
+    COMPARING:
+        db 'Comparing', 0
+
+    BOOT_DRIVE:
+        db 0
+
+    
+    MSG_PROT_MODE: db "Successfully landed in 32 - bit Protected Mode" , 0 
+    
+
+
+
+
+
